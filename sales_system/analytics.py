@@ -138,8 +138,13 @@ def _save_top_products_chart(top_items: pd.DataFrame, filename: Path) -> Path:
 
 
 def _save_revenue_trend_chart(monthly: pd.DataFrame, filename: Path) -> Path:
+    # Only plot months with actual revenue so long gaps with no transactions do not appear as a flat zero line.
+    plot_monthly = monthly[monthly["total_revenue"] > 0]
+    if plot_monthly.empty:
+        plot_monthly = monthly
+
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(monthly["date_of_transaction"], monthly["total_revenue"], marker="o", color="#0d47a1")
+    ax.plot(plot_monthly["date_of_transaction"], plot_monthly["total_revenue"], marker="o", color="#0d47a1")
     ax.set_title("Monthly Revenue Trend")
     ax.set_xlabel("Month")
     ax.set_ylabel("Revenue")

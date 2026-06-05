@@ -14,8 +14,20 @@ import sympy as sp
 from .analytics import monthly_revenue
 
 
-def forecast_sales(df: pd.DataFrame, periods: int = 3) -> pd.DataFrame:
+def _observed_monthly_revenue(df: pd.DataFrame) -> pd.DataFrame:
     monthly = monthly_revenue(df)
+    transaction_counts = (
+        df.set_index("date_of_transaction")
+        .resample("MS")
+        .size()
+        .reset_index(name="transaction_count")
+    )
+    monthly = monthly.merge(transaction_counts, on="date_of_transaction", how="left")
+    return monthly.loc[monthly["transaction_count"] > 0].copy()
+
+
+def forecast_sales(df: pd.DataFrame, periods: int = 3) -> pd.DataFrame:
+    monthly = _observed_monthly_revenue(df)
     if len(monthly) < 2:
         raise ValueError("At least two months of sales data are required for forecasting.")
 
@@ -52,7 +64,7 @@ def linear_equation_string(slope: float, intercept: float) -> str:
 
 
 def save_forecast_chart(df: pd.DataFrame, forecast_df: pd.DataFrame, filename: str | Path) -> Path:
-    monthly = monthly_revenue(df)
+    monthly = _observed_monthly_revenue(df)
     output_path = Path(filename)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
