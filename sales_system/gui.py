@@ -7,6 +7,7 @@ import tkinter.scrolledtext as scrolled
 from tkinter import messagebox, ttk
 import customtkinter as ctk
 from PIL import Image, ImageTk
+import pandas as pd
 
 from .app import SalesAnalyticsApp
 from .config import DATASET_PATH, ensure_dataset_file, ensure_project_directories
@@ -65,7 +66,7 @@ class SalesAnalyticsGUI(ctk.CTk):
 
     def _threaded(self, fn):
         def wrapper():
-            threading.Thread(target=fn, daemon=True).start()
+            fn()
 
         return wrapper
 
@@ -272,6 +273,11 @@ class SalesAnalyticsGUI(ctk.CTk):
         self._refresh_product_table()
 
     def _refresh_category_options(self, current_selection: str | None = None) -> None:
+        if hasattr(self, "pm_category_combo") and not self.pm_category_combo.winfo_exists():
+            return
+        if hasattr(self, "pm_category_filter") and not self.pm_category_filter.winfo_exists():
+            return
+
         categories = []
         df = self.app.catalog.list_products()
         if not df.empty and "product_category" in df.columns:
@@ -315,7 +321,7 @@ class SalesAnalyticsGUI(ctk.CTk):
         self._refresh_category_options(current_selection=current_selection)
 
     def _refresh_product_table(self) -> None:
-        if not hasattr(self, "product_tree"):
+        if not hasattr(self, "product_tree") or not self.product_tree.winfo_exists():
             return
 
         self._refresh_category_options()

@@ -117,6 +117,7 @@ class SalesAnalyticsApp:
             save_transactions(cleaned, self.active_dataset_path)
             # Update in-memory data so analytics sees the cleaned version immediately
             self.raw_transactions = cleaned.copy()
+            self.catalog.load(self.raw_transactions)
         except Exception as exc:
             print(f"Failed to save cleaned dataset: {exc}")
 
