@@ -94,11 +94,22 @@ def load_transactions(path: str | Path) -> pd.DataFrame:
 
     string_columns: Iterable[str] = ["transaction_id", "product_name", "product_category"]
     for column in string_columns:
-        df[column] = df[column].astype(str).str.strip()
+        non_missing = df[column].notna()
+        df.loc[non_missing, column] = df.loc[non_missing, column].astype(str).str.strip()
 
-    df["transaction_id"] = df["transaction_id"].str.upper()
-    df["product_name"] = df["product_name"].str.replace(r"\s+", " ", regex=True).str.title()
-    df["product_category"] = df["product_category"].str.replace(r"\s+", " ", regex=True).str.title()
+    if "transaction_id" in df.columns:
+        non_missing = df["transaction_id"].notna()
+        df.loc[non_missing, "transaction_id"] = df.loc[non_missing, "transaction_id"].astype(str).str.upper()
+    if "product_name" in df.columns:
+        non_missing = df["product_name"].notna()
+        df.loc[non_missing, "product_name"] = (
+            df.loc[non_missing, "product_name"].astype(str).str.replace(r"\s+", " ", regex=True).str.title()
+        )
+    if "product_category" in df.columns:
+        non_missing = df["product_category"].notna()
+        df.loc[non_missing, "product_category"] = (
+            df.loc[non_missing, "product_category"].astype(str).str.replace(r"\s+", " ", regex=True).str.title()
+        )
 
     numeric_columns = ["quantity_sold", "unit_price", "total_amount", "inventory_stock"]
     for column in numeric_columns:
@@ -212,48 +223,73 @@ def clean_transactions(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, in
 
     df["date_of_transaction"] = pd.to_datetime(df["date_of_transaction"], errors="coerce")
 
-    # Track missing values before applying fixes/removals.
+    # Track missing values before applying fixes.
     missing_before_cleaning = int(df[present_important_columns].isna().any(axis=1).sum()) if present_important_columns else 0
 
-    # Critical fields: missing values here cause row removal.
-    critical_columns = [
-        column
-        for column in ["transaction_id", "product_name", "date_of_transaction", "quantity_sold", "unit_price"]
-        if column in df.columns
-    ]
-    critical_missing_mask = df[critical_columns].isna().any(axis=1) if critical_columns else pd.Series(False, index=df.index)
-    rows_removed_due_to_missing = int(critical_missing_mask.sum())
-    if rows_removed_due_to_missing:
-        print(f"[DEBUG] Rows removed due to missing critical fields: {rows_removed_due_to_missing}")
-        df = df.loc[~critical_missing_mask].copy()
+    rows_imputed_due_to_missing = 0
 
-    # Non-critical fields: fill with defaults or derive them.
-    rows_modified_due_to_missing = 0
+    if "transaction_id" in df.columns:
+        missing_mask = df["transaction_id"].isna()
+        existing_ids = set(df.loc[~missing_mask, "transaction_id"].astype(str).str.upper())
+        next_counter = len(existing_ids) + 1
+        for idx in df.index[missing_mask]:
+            candidate = f"TXN-AUTO-{next_counter:06d}"
+            while candidate in existing_ids:
+                next_counter += 1
+                candidate = f"TXN-AUTO-{next_counter:06d}"
+            df.at[idx, "transaction_id"] = candidate
+            existing_ids.add(candidate)
+            next_counter += 1
+            rows_imputed_due_to_missing += 1
+
+    if "product_name" in df.columns:
+        missing_mask = df["product_name"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "product_name"] = "Unknown Product"
+            rows_imputed_due_to_missing += int(missing_mask.sum())
 
     if "product_category" in df.columns:
-        category_missing_mask = df["product_category"].isna()
-        rows_modified_due_to_missing += int(category_missing_mask.sum())
-        if category_missing_mask.any():
-            df.loc[category_missing_mask, "product_category"] = "Uncategorized"
+        missing_mask = df["product_category"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "product_category"] = "Uncategorized"
+            rows_imputed_due_to_missing += int(missing_mask.sum())
+
+    if "quantity_sold" in df.columns:
+        missing_mask = df["quantity_sold"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "quantity_sold"] = 0
+            rows_imputed_due_to_missing += int(missing_mask.sum())
+
+    if "unit_price" in df.columns:
+        missing_mask = df["unit_price"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "unit_price"] = 0
+            rows_imputed_due_to_missing += int(missing_mask.sum())
 
     if "inventory_stock" in df.columns:
-        inventory_missing_mask = df["inventory_stock"].isna()
-        rows_modified_due_to_missing += int(inventory_missing_mask.sum())
-        if inventory_missing_mask.any():
-            df.loc[inventory_missing_mask, "inventory_stock"] = 0
+        missing_mask = df["inventory_stock"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "inventory_stock"] = 0
+            rows_imputed_due_to_missing += int(missing_mask.sum())
+
+    if "date_of_transaction" in df.columns:
+        missing_mask = df["date_of_transaction"].isna()
+        if missing_mask.any():
+            df.loc[missing_mask, "date_of_transaction"] = pd.Timestamp.today().normalize()
+            rows_imputed_due_to_missing += int(missing_mask.sum())
 
     if "total_amount" in df.columns:
-        calculated_total = (df["quantity_sold"] * df["unit_price"]).round(2)
+        calculated_total = (df["quantity_sold"].fillna(0) * df["unit_price"].fillna(0)).round(2)
         total_missing_mask = df["total_amount"].isna()
         total_mismatch_mask = (~total_missing_mask) & ((df["total_amount"] - calculated_total).abs() > 0.01)
         total_fix_mask = total_missing_mask | total_mismatch_mask
         if total_fix_mask.any():
-            rows_modified_due_to_missing += int(total_fix_mask.sum())
             df.loc[total_fix_mask, "total_amount"] = calculated_total[total_fix_mask]
+            rows_imputed_due_to_missing += int(total_fix_mask.sum())
 
-    print(f"[DEBUG] Rows modified due to missing non-critical fields: {rows_modified_due_to_missing}")
+    print(f"[DEBUG] Rows imputed due to missing fields: {rows_imputed_due_to_missing}")
 
-    calculated_total = (df["quantity_sold"] * df["unit_price"]).round(2)
+    calculated_total = (df["quantity_sold"].fillna(0) * df["unit_price"].fillna(0)).round(2)
     needs_recalc = df["total_amount"].isna() | ((df["total_amount"] - calculated_total).abs() > 0.01)
     df.loc[needs_recalc, "total_amount"] = calculated_total[needs_recalc]
 
@@ -265,7 +301,7 @@ def clean_transactions(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, in
         & df["quantity_sold"].notna()
         & df["unit_price"].notna()
         & df["total_amount"].notna()
-        & (df["quantity_sold"] > 0)
+        & (df["quantity_sold"] >= 0)
         & (df["unit_price"] >= 0)
         & (df["inventory_stock"].fillna(0) >= 0)
     )
@@ -314,8 +350,8 @@ def clean_transactions(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, in
         "txn_duplicates_removed": txn_duplicates_removed,
         "product_duplicates_removed": product_duplicates_removed,
         "missing_values_detected": missing_before_cleaning,
-        "missing_values_removed": rows_removed_due_to_missing,
-        "missing_values_fixed": rows_modified_due_to_missing,
+        "missing_values_removed": 0,
+        "missing_values_fixed": rows_imputed_due_to_missing,
     }
 
     # Debugging output

@@ -74,10 +74,8 @@ def cleaning_summary_text(report: dict[str, int]) -> str:
     missing_fixed = report.get("missing_values_fixed")
     if missing_detected is not None:
         summary += f"\nMissing values detected: {missing_detected}"
-    if missing_removed is not None:
-        summary += f"\nRows removed due to missing critical fields: {missing_removed}"
     if missing_fixed is not None:
-        summary += f"\nRows fixed due to missing non-critical fields: {missing_fixed}"
+        summary += f"\nMissing values imputed: {missing_fixed}"
 
     return summary
 

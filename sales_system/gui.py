@@ -201,9 +201,13 @@ class SalesAnalyticsGUI(ctk.CTk):
         self.pm_price = tk.StringVar()
         tk.Entry(form, textvariable=self.pm_price, width=16).grid(row=3, column=1, pady=4, sticky="w")
 
-        tk.Label(form, text="Inventory Stock:").grid(row=4, column=0, sticky="e", pady=4)
+        tk.Label(form, text="Quantity Sold:").grid(row=4, column=0, sticky="e", pady=4)
+        self.pm_quantity_sold = tk.StringVar()
+        tk.Entry(form, textvariable=self.pm_quantity_sold, width=16).grid(row=4, column=1, pady=4, sticky="w")
+
+        tk.Label(form, text="Inventory Stock:").grid(row=5, column=0, sticky="e", pady=4)
         self.pm_stock = tk.StringVar()
-        tk.Entry(form, textvariable=self.pm_stock, width=16).grid(row=4, column=1, pady=4, sticky="w")
+        tk.Entry(form, textvariable=self.pm_stock, width=16).grid(row=5, column=1, pady=4, sticky="w")
 
         btn_frame = ctk.CTkFrame(left)
         btn_frame.pack(fill="x", pady=(10, 6))
@@ -236,20 +240,7 @@ class SalesAnalyticsGUI(ctk.CTk):
         table_frame = ctk.CTkFrame(right)
         table_frame.pack(fill="both", expand=True)
 
-        columns = ("product_id", "product_name", "product_category", "unit_price", "inventory_stock", "date_of_transaction")
-        self.product_tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
-        self.product_tree.heading("product_id", text="Product ID")
-        self.product_tree.heading("product_name", text="Product Name")
-        self.product_tree.heading("product_category", text="Category")
-        self.product_tree.heading("unit_price", text="Unit Price")
-        self.product_tree.heading("inventory_stock", text="Inventory Stock")
-        self.product_tree.heading("date_of_transaction", text="Date Added")
-        self.product_tree.column("product_id", width=110, anchor="w")
-        self.product_tree.column("product_name", width=220, anchor="w")
-        self.product_tree.column("product_category", width=160, anchor="w")
-        self.product_tree.column("unit_price", width=110, anchor="e")
-        self.product_tree.column("inventory_stock", width=120, anchor="e")
-        self.product_tree.column("date_of_transaction", width=120, anchor="center")
+        self.product_tree = ttk.Treeview(table_frame, columns=(), show="headings", selectmode="browse")
         self.product_tree.bind("<<TreeviewSelect>>", self._on_product_select)
 
         tree_scroll_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.product_tree.yview)
@@ -279,7 +270,7 @@ class SalesAnalyticsGUI(ctk.CTk):
             return
 
         categories = []
-        df = self.app.catalog.list_products()
+        df = self._display_frame()
         if not df.empty and "product_category" in df.columns:
             categories = sorted({str(value) for value in df["product_category"].dropna().astype(str)})
 
@@ -296,8 +287,50 @@ class SalesAnalyticsGUI(ctk.CTk):
                 desired = "All Categories"
             self.pm_category_filter_var.set(desired)
 
+    def _display_frame(self) -> pd.DataFrame:
+        return self.app.current_frame().reset_index(drop=True)
+
+    def _tree_identifier_column(self, df: pd.DataFrame) -> str | None:
+        for candidate in ("transaction_id", "product_id"):
+            if candidate in df.columns:
+                return candidate
+        return df.columns[0] if len(df.columns) else None
+
+    def _format_tree_value(self, value: object) -> object:
+        if pd.isna(value):
+            return ""
+        if hasattr(value, "strftime"):
+            return value.strftime("%Y-%m-%d")
+        return value
+
+    def _sync_tree_columns(self, df: pd.DataFrame) -> None:
+        columns = list(df.columns)
+        current_columns = list(self.product_tree["columns"])
+        if current_columns != columns:
+            self.product_tree["columns"] = columns
+
+        for column in columns:
+            heading_text = column.replace("_", " ").title()
+            self.product_tree.heading(column, text=heading_text)
+
+            lowered = column.lower()
+            if lowered in {"transaction_id", "product_id"}:
+                anchor = "w"
+                width = 140
+            elif "date" in lowered:
+                anchor = "center"
+                width = 130
+            elif any(token in lowered for token in ("price", "amount", "quantity", "stock", "total")):
+                anchor = "e"
+                width = 120
+            else:
+                anchor = "w"
+                width = max(120, min(260, len(heading_text) * 10))
+
+            self.product_tree.column(column, width=width, anchor=anchor, stretch=True)
+
     def _filtered_product_frame(self) -> pd.DataFrame:
-        df = self.app.catalog.list_products().reset_index(drop=True)
+        df = self._display_frame()
         if df.empty:
             return df
 
@@ -305,14 +338,11 @@ class SalesAnalyticsGUI(ctk.CTk):
         category_filter = self.pm_category_filter_var.get().strip() if hasattr(self, "pm_category_filter_var") else "All Categories"
 
         if search_text:
-            mask = (
-                df["product_id"].astype(str).str.lower().str.contains(search_text, na=False)
-                | df["product_name"].astype(str).str.lower().str.contains(search_text, na=False)
-                | df["product_category"].astype(str).str.lower().str.contains(search_text, na=False)
-            )
+            text_frame = df.astype(str).apply(lambda column: column.str.lower())
+            mask = text_frame.apply(lambda column: column.str.contains(search_text, na=False)).any(axis=1)
             df = df.loc[mask].copy()
 
-        if category_filter and category_filter != "All Categories":
+        if category_filter and category_filter != "All Categories" and "product_category" in df.columns:
             df = df.loc[df["product_category"].astype(str).str.lower().eq(category_filter.lower())].copy()
 
         return df.reset_index(drop=True)
@@ -330,19 +360,12 @@ class SalesAnalyticsGUI(ctk.CTk):
             self.product_tree.delete(item)
 
         df = self._filtered_product_frame()
+        self._sync_tree_columns(df)
+        identifier_column = self._tree_identifier_column(df)
         for _, row in df.iterrows():
-            date_added = row.get("date_of_transaction")
-            if hasattr(date_added, "strftime"):
-                date_added = date_added.strftime("%Y-%m-%d")
-            values = (
-                row["product_id"],
-                row["product_name"],
-                row["product_category"],
-                f"{float(row['unit_price']):.2f}",
-                str(int(float(row["inventory_stock"]))),
-                date_added,
-            )
-            self.product_tree.insert("", tk.END, iid=str(row["product_id"]), values=values)
+            values = [self._format_tree_value(row[column]) for column in df.columns]
+            row_identifier = str(row[identifier_column]) if identifier_column else str(len(self.product_tree.get_children()))
+            self.product_tree.insert("", tk.END, iid=row_identifier, values=values)
 
         if selected_id and self.product_tree.exists(selected_id):
             self.product_tree.selection_set(selected_id)
@@ -357,22 +380,44 @@ class SalesAnalyticsGUI(ctk.CTk):
             return
 
         selected_id = sel[0]
-        df = self.app.catalog.list_products().reset_index(drop=True)
-        row = df.loc[df["product_id"].astype(str) == str(selected_id)]
+        df = self._display_frame().reset_index(drop=True)
+        identifier_column = self._tree_identifier_column(df)
+        if identifier_column is None:
+            return
+
+        row = df.loc[df[identifier_column].astype(str) == str(selected_id)]
         if row.empty:
             return
         row = row.iloc[0]
-        self.pm_id.set(str(row["product_id"]))
-        self.pm_name.set(str(row["product_name"]))
-        self.pm_category.set(str(row["product_category"]))
-        self.pm_price.set(f"{float(row['unit_price']):.2f}")
-        self.pm_stock.set(str(int(float(row["inventory_stock"]))))
+        if hasattr(self, "pm_id"):
+            self.pm_id.set(str(row[identifier_column]))
+        if hasattr(self, "pm_name"):
+            self.pm_name.set(str(row["product_name"])) if "product_name" in row.index else self.pm_name.set("")
+        if hasattr(self, "pm_category"):
+            self.pm_category.set(str(row["product_category"])) if "product_category" in row.index else self.pm_category.set("")
+        if hasattr(self, "pm_price"):
+            if "unit_price" in row.index and pd.notna(row["unit_price"]):
+                self.pm_price.set(f"{float(row['unit_price']):.2f}")
+            else:
+                self.pm_price.set("")
+        if hasattr(self, "pm_quantity_sold"):
+            if "quantity_sold" in row.index and pd.notna(row["quantity_sold"]):
+                self.pm_quantity_sold.set(str(int(float(row["quantity_sold"]))))
+            else:
+                self.pm_quantity_sold.set("")
+        if hasattr(self, "pm_stock"):
+            if "inventory_stock" in row.index and pd.notna(row["inventory_stock"]):
+                self.pm_stock.set(str(int(float(row["inventory_stock"]))))
+            else:
+                self.pm_stock.set("")
 
     def _clear_product_form(self) -> None:
         self.pm_id.set("")
         self.pm_name.set("")
         self.pm_category.set("")
         self.pm_price.set("")
+        if hasattr(self, "pm_quantity_sold"):
+            self.pm_quantity_sold.set("")
         self.pm_stock.set("")
         if hasattr(self, "product_tree"):
             self.product_tree.selection_remove(self.product_tree.selection())
@@ -382,12 +427,13 @@ class SalesAnalyticsGUI(ctk.CTk):
             name = self.pm_name.get().strip()
             category = self.pm_category.get().strip()
             price = float(self.pm_price.get() or 0)
+            quantity_sold = int(float(self.pm_quantity_sold.get() or 0))
             stock = int(float(self.pm_stock.get() or 0))
             if not name or not category:
                 raise ValueError("Product name and category are required.")
-            if price < 0 or stock < 0:
-                raise ValueError("Unit price and inventory stock must be non-negative.")
-            product = self.app.catalog.add_product(name, category, price, stock)
+            if price < 0 or quantity_sold < 0 or stock < 0:
+                raise ValueError("Unit price, quantity sold, and inventory stock must be non-negative.")
+            product = self.app.catalog.add_product(name, category, price, stock, quantity_sold)
             self.app._sync_after_dataset_change()
             self._refresh_product_table()
             self._log(f"Added product {product['product_id']} - {product['product_name']}")
@@ -410,6 +456,7 @@ class SalesAnalyticsGUI(ctk.CTk):
             name = self.pm_name.get().strip()
             category = self.pm_category.get().strip()
             price_text = self.pm_price.get().strip()
+            quantity_text = self.pm_quantity_sold.get().strip() if hasattr(self, "pm_quantity_sold") else ""
             stock_text = self.pm_stock.get().strip()
 
             if name:
@@ -418,6 +465,8 @@ class SalesAnalyticsGUI(ctk.CTk):
                 changes["product_category"] = category
             if price_text:
                 changes["unit_price"] = float(price_text)
+            if quantity_text:
+                changes["quantity_sold"] = int(float(quantity_text))
             if stock_text:
                 changes["inventory_stock"] = int(float(stock_text))
 
@@ -433,6 +482,9 @@ class SalesAnalyticsGUI(ctk.CTk):
                     continue
                 if key in {"unit_price"}:
                     if round(float(updated[key]), 2) != round(float(value), 2):
+                        raise RuntimeError(f"Validation failed for {key}.")
+                elif key in {"quantity_sold"}:
+                    if int(updated[key]) != int(value):
                         raise RuntimeError(f"Validation failed for {key}.")
                 elif key in {"inventory_stock"}:
                     if int(updated[key]) != int(value):

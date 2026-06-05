@@ -4,10 +4,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from .data_loader import save_transactions
+try:
+    from .data_loader import save_transactions
+except ImportError:  # pragma: no cover - allows running this file directly
+    from data_loader import save_transactions
 
 
-CATALOG_COLUMNS = ["product_id", "product_name", "product_category", "unit_price", "inventory_stock", "date_of_transaction"]
+CATALOG_COLUMNS = ["product_id", "product_name", "product_category", "quantity_sold", "unit_price", "inventory_stock", "date_of_transaction"]
 
 
 class ProductCatalog:
@@ -20,7 +23,10 @@ class ProductCatalog:
         if source_transactions is not None:
             self.dataset_frame = source_transactions.copy()
         elif self.storage_path.exists():
-            from .data_loader import load_transactions
+            try:
+                from .data_loader import load_transactions
+            except ImportError:  # pragma: no cover - allows running this file directly
+                from data_loader import load_transactions
 
             self.dataset_frame = load_transactions(self.storage_path)
         else:
@@ -41,7 +47,14 @@ class ProductCatalog:
     def list_products(self) -> pd.DataFrame:
         return self.frame.copy().sort_values(["date_of_transaction", "product_category", "product_name"]).reset_index(drop=True)
 
-    def add_product(self, product_name: str, product_category: str, unit_price: float, inventory_stock: int) -> dict[str, object]:
+    def add_product(
+        self,
+        product_name: str,
+        product_category: str,
+        unit_price: float,
+        inventory_stock: int,
+        quantity_sold: int = 1,
+    ) -> dict[str, object]:
         product_id = self._next_transaction_id()
         product_name = self._clean_text(product_name)
         product_category = self._clean_text(product_category)
@@ -50,6 +63,7 @@ class ProductCatalog:
             "product_id": product_id,
             "product_name": product_name,
             "product_category": product_category,
+            "quantity_sold": int(quantity_sold),
             "unit_price": round(float(unit_price), 2),
             "inventory_stock": int(inventory_stock),
             "date_of_transaction": created_at,
@@ -58,10 +72,10 @@ class ProductCatalog:
             "transaction_id": product_id,
             "product_name": product_name,
             "product_category": product_category,
-            "quantity_sold": 1,
+            "quantity_sold": int(quantity_sold),
             "unit_price": round(float(unit_price), 2),
             "date_of_transaction": created_at,
-            "total_amount": round(float(unit_price), 2),
+            "total_amount": round(float(unit_price) * int(quantity_sold), 2),
             "inventory_stock": int(inventory_stock),
         }
 
@@ -86,6 +100,8 @@ class ProductCatalog:
                 updates[key] = self._clean_text(str(value))
             elif key == "unit_price" and value is not None:
                 updates[key] = round(float(value), 2)
+            elif key == "quantity_sold" and value is not None:
+                updates[key] = int(value)
             elif key == "inventory_stock" and value is not None:
                 updates[key] = int(value)
 
@@ -97,6 +113,11 @@ class ProductCatalog:
             dataset_key = "date_of_transaction" if key == "date_of_transaction" else key
             if dataset_key in self.dataset_frame.columns:
                 self.dataset_frame.loc[dataset_mask, dataset_key] = value
+
+        if {"quantity_sold", "unit_price"} & updates.keys():
+            quantity_series = pd.to_numeric(self.dataset_frame.loc[dataset_mask, "quantity_sold"], errors="coerce").fillna(0)
+            price_series = pd.to_numeric(self.dataset_frame.loc[dataset_mask, "unit_price"], errors="coerce").fillna(0)
+            self.dataset_frame.loc[dataset_mask, "total_amount"] = (quantity_series * price_series).round(2)
 
         self._rebuild_catalog_view()
         self.save()
@@ -208,7 +229,7 @@ class ProductCatalog:
         if "date_of_transaction" not in frame.columns:
             frame["date_of_transaction"] = pd.NaT
 
-        catalog = frame[["transaction_id", "product_name", "product_category", "unit_price", "inventory_stock", "date_of_transaction"]].copy()
+        catalog = frame[["transaction_id", "product_name", "product_category", "quantity_sold", "unit_price", "inventory_stock", "date_of_transaction"]].copy()
         catalog = catalog.rename(columns={"transaction_id": "product_id"})
         catalog = catalog.sort_values(["date_of_transaction", "product_category", "product_name", "product_id"]).reset_index(drop=True)
         self.frame = catalog[CATALOG_COLUMNS]
