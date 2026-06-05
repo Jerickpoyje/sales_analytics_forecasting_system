@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1000" viewBox="0 0 1200 1000">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2937" />
+    </marker>
+    <style>
+      .process { fill: #ffffff; stroke: #1f2937; stroke-width: 2; rx:8; }
+      .terminal { fill: #dbeafe; stroke: #1f2937; stroke-width: 2; }
+      .decision { fill: #fef3c7; stroke: #1f2937; stroke-width: 2; }
+      .title { font: 18px sans-serif; fill: #111111; font-weight:700; }
+      .text { font: 15px sans-serif; fill: #111111; }
+      .small { font: 14px sans-serif; fill: #1f2937; }
+      .line { stroke: #1f2937; stroke-width: 2; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <!-- Main vertical flow -->
+  <!-- Start (Oval/Ellipse) -->
+  <ellipse cx="600" cy="40" rx="120" ry="30" class="terminal" />
+  <text x="600" y="48" text-anchor="middle" class="title">Start / Open Application</text>
+
+  <line x1="600" y1="70" x2="600" y2="110" class="line" />
+
+  <!-- Load Dataset (Rectangle) -->
+  <rect x="400" y="110" width="400" height="64" class="process" />
+  <text x="600" y="142" text-anchor="middle" class="title">Load Dataset</text>
+  <text x="600" y="162" text-anchor="middle" class="small">data/retail_synthetic_dataset.csv</text>
+
+  <line x1="600" y1="174" x2="600" y2="210" class="line" />
+
+  <!-- Main Menu (Rectangle) -->
+  <rect x="450" y="210" width="300" height="60" class="process" />
+  <text x="600" y="245" text-anchor="middle" class="title">Main Menu</text>
+
+  <!-- LEFT BRANCH: Analytics & Catalog -->
+  <line x1="500" y1="270" x2="250" y2="320" class="line" />
+
+  <!-- Analytics -->
+  <rect x="100" y="320" width="200" height="80" class="process" />
+  <text x="200" y="356" text-anchor="middle" class="title">View Analytics</text>
+  <text x="200" y="378" text-anchor="middle" class="small">Dashboards, Filters</text>
+
+  <line x1="200" y1="400" x2="200" y2="480" class="line" stroke-dasharray="5,5" />
+
+  <!-- Catalog -->
+  <rect x="320" y="320" width="200" height="80" class="process" />
+  <text x="420" y="356" text-anchor="middle" class="title">Product Catalog</text>
+  <text x="420" y="378" text-anchor="middle" class="small">View / Edit / Save</text>
+
+  <line x1="420" y1="400" x2="420" y2="480" class="line" stroke-dasharray="5,5" />
+
+  <!-- MIDDLE BRANCH: Clean Data -->
+  <line x1="600" y1="270" x2="600" y2="320" class="line" />
+
+  <rect x="480" y="320" width="240" height="80" class="process" />
+  <text x="600" y="356" text-anchor="middle" class="title">Clean Data</text>
+  <text x="600" y="378" text-anchor="middle" class="small">Normalize, Remove Dups</text>
+
+  <line x1="600" y1="400" x2="600" y2="480" class="line" />
+
+  <!-- RIGHT BRANCH: Add/Update & Forecasting -->
+  <line x1="700" y1="270" x2="950" y2="320" class="line" />
+
+  <!-- Add/Update Product -->
+  <rect x="800" y="320" width="200" height="80" class="process" />
+  <text x="900" y="356" text-anchor="middle" class="title">Add / Update</text>
+  <text x="900" y="378" text-anchor="middle" class="small">Form -> Save CSV</text>
+
+  <line x1="900" y1="400" x2="900" y2="480" class="line" stroke-dasharray="5,5" />
+
+  <!-- Forecasting -->
+  <rect x="1020" y="320" width="200" height="80" class="process" />
+  <text x="1120" y="356" text-anchor="middle" class="title">Forecasting</text>
+  <text x="1120" y="378" text-anchor="middle" class="small">Run models, Export</text>
+
+  <line x1="1120" y1="400" x2="1120" y2="480" class="line" stroke-dasharray="5,5" />
+
+  <!-- Results all converge to Decision Point -->
+  <!-- Cleaning Report -->
+  <rect x="420" y="480" width="280" height="80" class="process" />
+  <text x="560" y="516" text-anchor="middle" class="title">Cleaning Report</text>
+  <text x="560" y="538" text-anchor="middle" class="small">missing_detected / removed / fixed</text>
+
+  <line x1="560" y1="560" x2="560" y2="600" class="line" />
+
+  <!-- Save Result - Decision Diamond -->
+  <polygon points="600,620 680,680 600,740 520,680" class="decision" />
+  <text x="600" y="675" text-anchor="middle" class="title">Save Result</text>
+  <text x="600" y="695" text-anchor="middle" class="small">OK / Error?</text>
+
+  <!-- Lines from left branches to decision -->
+  <line x1="200" y1="480" x2="200" y2="550" class="line" stroke-dasharray="5,5" />
+  <line x1="200" y1="550" x2="550" y2="550" class="line" stroke-dasharray="5,5" />
+  <line x1="550" y1="550" x2="550" y2="620" class="line" stroke-dasharray="5,5" />
+
+  <!-- Lines from right branches to decision -->
+  <line x1="900" y1="480" x2="900" y2="550" class="line" stroke-dasharray="5,5" />
+  <line x1="900" y1="550" x2="650" y2="550" class="line" stroke-dasharray="5,5" />
+  <line x1="650" y1="550" x2="650" y2="620" class="line" stroke-dasharray="5,5" />
+
+  <line x1="1120" y1="480" x2="1120" y2="550" class="line" stroke-dasharray="5,5" />
+  <line x1="1120" y1="550" x2="700" y2="550" class="line" stroke-dasharray="5,5" />
+
+  <!-- Exit from decision -->
+  <line x1="600" y1="740" x2="600" y2="800" class="line" />
+
+  <!-- Exit (Oval/Ellipse) -->
+  <ellipse cx="600" cy="840" rx="100" ry="30" class="terminal" />
+  <text x="600" y="848" text-anchor="middle" class="title">Exit</text>
+
+  <!-- Legend / Notes -->
+  <g transform="translate(50,900)">
+    <rect x="0" y="0" width="1100" height="80" fill="#fff7ed" stroke="#f59e0b" rx="6" stroke-width="2" />
+    <text x="12" y="22" class="title">Legend</text>
+    
+    <!-- Blue Oval: Start/End -->
+    <ellipse cx="45" cy="45" rx="25" ry="15" fill="#dbeafe" stroke="#1f2937" stroke-width="2" />
+    <text x="85" y="50" class="small">Start / End</text>
+    
+    <!-- White Rectangle: Process -->
+    <rect x="25" y="60" width="40" height="25" fill="#ffffff" stroke="#1f2937" stroke-width="2" />
+    <text x="85" y="75" class="small">Process</text>
+    
+    <!-- Yellow Diamond: Decision -->
+    <polygon points="45,90 60,100 45,110 30,100" fill="#fef3c7" stroke="#1f2937" stroke-width="2" />
+    <text x="85" y="105" class="small">Decision</text>
+    
+    <text x="240" y="50" class="small">Solid arrows: Primary flow | Dashed arrows: Result paths</text>
+  </g>
+
+</svg>
+
